@@ -66,3 +66,4 @@ After having the files on the folder, just type on the terminal
 "streamlit run Dashboard.py"
 
 If you have complete packages, then you should have no errors and the streamlit app will run smoothly
+P.S don't forget to change the save model, csv file paths on the py files
