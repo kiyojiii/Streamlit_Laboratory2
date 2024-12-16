@@ -1,5 +1,4 @@
 import random
-import duckdb
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -16,26 +15,36 @@ st.set_page_config(page_title="Dashboard", page_icon=":bar_chart:", layout="wide
 st.title("Resampling and Performance Metrics Dashboard")
 st.markdown("_Laboratory Exercise #2_")
 
-with st.sidebar:
-    st.header("Upload a CSV File")
-    uploaded_file = st.file_uploader("Choose a file")
-
-if uploaded_file is None:
-    st.info(" Upload a file through config", icon="ℹ️")
-    st.stop()
-
 #######################################
 # DATA LOADING
 #######################################
-
 
 @st.cache_data
 def load_data(path: str):
     df = pd.read_csv(path)
     return df
 
+# File paths
+weather_path = r"C:\Users\user\Desktop\jeah\ITD105\LABORATORY2\csv\weather.csv"
+lung_cancer_path = r"C:\Users\user\Desktop\jeah\ITD105\LABORATORY2\csv\survey lung cancer.csv"
 
-df = load_data(uploaded_file)
+# Sidebar for dataset selection
+with st.sidebar:
+    st.header("Select a Dataset")
+    dataset_choice = st.selectbox(
+        "Choose a dataset:",
+        options=["Weather Data", "Lung Cancer Data"]
+    )
+
+# Load the chosen dataset
+if dataset_choice == "Weather Data":
+    uploaded_file = weather_path
+    df = load_data(uploaded_file)
+    csv_type = 'air quality'
+elif dataset_choice == "Lung Cancer Data":
+    uploaded_file = lung_cancer_path
+    df = load_data(uploaded_file)
+    csv_type = 'lung cancer'
 
 # Check if the CSV is lung cancer or air quality
 csv_type = 'lung cancer' if 'LUNG_CANCER' in df.columns else 'air quality'
@@ -139,38 +148,18 @@ def plot_top_right():
         st.plotly_chart(fig_gender_lung_cancer, use_container_width=True)
 
     elif csv_type == 'air quality':
-        # CO Level Distribution Bar Graph
-        co_level_order = ["Very Low", "Low", "Moderate", "High", "Very High"]  # Define the correct order
-        co_level_colors = {
-            "Very Low": "#00FF00",  # Green
-            "Low": "#7FFF00",       # Chartreuse
-            "Moderate": "#FFFF00",  # Yellow
-            "High": "#FFA500",      # Orange
-            "Very High": "#FF0000", # Red
-        }
+        # Rain Occurrence Bar Chart
+        rain_counts = df['Rain'].value_counts()
+        rain_labels = {0: "No Rain", 1: "Rain"}
 
-        # Ensure CO_level is a categorical column with the specified order
-        df['CO_level'] = pd.Categorical(df['CO_level'], categories=co_level_order, ordered=True)
-
-        # Calculate CO Level counts
-        co_level_count = df['CO_level'].value_counts().reindex(co_level_order)
-
-        # Plot the bar chart with custom colors
         fig = px.bar(
-            x=co_level_count.index,
-            y=co_level_count.values,
-            labels={'x': 'CO Level', 'y': 'Count'},
-            title="CO Level Distribution",
-            color=co_level_count.index,
-            color_discrete_map=co_level_colors,  # Apply custom color mapping
+            x=rain_counts.index.map(rain_labels.get),
+            y=rain_counts.values,
+            labels={'x': 'Rain Occurrence', 'y': 'Count'},
+            title="Rain Occurrence Distribution",
+            color=rain_counts.index.map(rain_labels.get),
+            color_discrete_sequence=["#4CAF50", "#2196F3"],  # Green for no rain, blue for rain
         )
-
-        # Update layout to remove legend and maintain the desired order
-        fig.update_layout(
-            xaxis={'categoryorder': 'array', 'categoryarray': co_level_order},
-            showlegend=False  # Remove the legend
-        )
-
         st.plotly_chart(fig, use_container_width=True)
 
 def plot_bottom_left():
@@ -199,32 +188,24 @@ def plot_bottom_left():
         st.plotly_chart(fig, use_container_width=True)
 
     elif csv_type == 'air quality':
-        # Convert Date to datetime
-        df['Date'] = pd.to_datetime(df['Date'])
-
-        # Filter out rows where T equals -200
-        filtered_df = df[df['T'] != -200]
-
-        # Aggregate data to reduce clutter (daily average of T)
-        daily_avg = filtered_df.groupby('Date')['T'].mean().reset_index()
-
-        # Plot the trend of daily average T over time
-        fig = px.line(
-            daily_avg,
-            x="Date",
-            y="T",
-            markers=True,
-            title="Daily Average Temperature Trend Over Time",
-            labels={"T": "Temperature (T)", "Date": "Date"},
+        # Scatterplot for Temperature_c vs. Humidity
+        fig = px.scatter(
+            df,
+            x="Temperature_c",
+            y="Humidity",
+            title="Scatterplot of Temperature vs. Humidity",
+            labels={"Temperature_c": "Temperature (°C)", "Humidity": "Humidity (Ratio)"},
         )
-        # Update line and marker colors to orange
-        fig.update_traces(line_color='orange', marker_color='orange')
 
+        # Customizing the marker colors
+        fig.update_traces(marker=dict(color="red", size=8, opacity=0.7))
+
+        # Add axis titles
         fig.update_layout(
-            xaxis_title="Date",
-            yaxis_title="Temperature (T)",
-            showlegend=False,
+            xaxis_title="Temperature (°C)",
+            yaxis_title="Humidity (Ratio)",
         )
+
         st.plotly_chart(fig, use_container_width=True)
 
 def plot_bottom_right():
@@ -247,8 +228,19 @@ def plot_bottom_right():
         st.plotly_chart(fig, use_container_width=True)
 
     elif csv_type == 'air quality':
-        # Stacked Bar Chart for Date, Time and CO Level
-        fig = px.histogram(df, x="Date", color="CO_level", barmode="stack", title="Date and CO Level Distribution")
+        # Distribution of Weather Conditions by Description
+        fig = px.box(
+            df,
+            x="Description",
+            y="Temperature_c",
+            color="Description",
+            title="Distribution of Weather Conditions by Description",
+            labels={"Temperature_c": "Temperature (°C)", "Description": "Weather Description"},
+            boxmode="group",
+            points="all"  # Show all data points
+        )
+
+        # Display the visualization
         st.plotly_chart(fig, use_container_width=True)
 
 

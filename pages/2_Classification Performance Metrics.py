@@ -11,10 +11,10 @@ from sklearn.preprocessing import LabelEncoder
 import matplotlib.pyplot as plt
 
 
-# Function to load the dataset
+# Function to load the dataset from a predefined path
 @st.cache_data
-def load_data(uploaded_file):
-    dataframe = pd.read_csv(uploaded_file)
+def load_data(file_path):
+    dataframe = pd.read_csv(file_path)
     return dataframe
 
 
@@ -51,20 +51,31 @@ def calculate_log_loss(model, X, Y, cv_method):
 
 # Function to evaluate the model
 def evaluate_model(dataframe, method):
-    dataframe, label_encoders = preprocess_data(dataframe)
-    X = dataframe.iloc[:, :-1].values  # Features
-    Y = dataframe.iloc[:, -1].values  # Target
+    # Preprocess the dataset
+    preprocessed_data, label_encoders = preprocess_data(dataframe)
+
+    # Preprocessed data preview
+    st.subheader("Preprocessed Data Preview")
+    with st.expander("Preprocessed Data"):
+        st.dataframe(preprocessed_data)
+
+    X = preprocessed_data.iloc[:, :-1].values  # Features
+    Y = preprocessed_data.iloc[:, -1].values  # Target
 
     if method == "K-Fold Cross Validation":
         num_folds = st.sidebar.slider("Number of Folds (K-Fold):", 2, 20, 10)
         cv_method = KFold(n_splits=num_folds, shuffle=True, random_state=42)
     elif method == "Leave One Out Cross Validation":
         cv_method = LeaveOneOut()
+        st.warning(
+            "LOOCV uses one observation per fold. "
+            "Classification accuracy graph is not shown because it is binary per fold. "
+            "Log Loss and ROC Curve are skipped as they require larger validation sets for meaningful results."
+        )
 
     model = LogisticRegression(max_iter=500, class_weight='balanced')
 
     st.sidebar.subheader("Display Options")
-    # Sidebar checkboxes for metrics (automatically enabled)
     display_accuracy = st.sidebar.checkbox("Show Classification Accuracy", value=True)
     display_log_loss = st.sidebar.checkbox("Show Log Loss", value=True)
     display_conf_matrix = st.sidebar.checkbox("Show Confusion Matrix", value=True)
@@ -79,12 +90,18 @@ def evaluate_model(dataframe, method):
         matrix = confusion_matrix(Y, y_pred)
         report = classification_report(Y, y_pred, output_dict=True)
 
+    # Display warnings for unsupported metrics in LOOCV
+    if method == "Leave One Out Cross Validation" and (display_log_loss or display_roc):
+        if display_log_loss:
+            st.warning("Log Loss is not displayed for LOOCV due to insufficient class diversity in single-observation validation sets.")
+        if display_roc:
+            st.warning("ROC Curve is not displayed for LOOCV because single-observation validation sets do not provide enough data points.")
+
     # Classification Accuracy
     if display_accuracy:
         st.subheader("Classification Accuracy")
         st.write(f"Accuracy: {results.mean() * 100:.2f}% ± {results.std() * 100:.2f}%")
 
-        # Plot Classification Accuracy
         if method == "K-Fold Cross Validation":
             plt.figure(figsize=(10, 5))
             plt.boxplot(results)
@@ -94,17 +111,15 @@ def evaluate_model(dataframe, method):
             st.pyplot(plt)
 
     # Log Loss
-    if display_log_loss and log_loss_values:
+    if display_log_loss and method != "Leave One Out Cross Validation":
         st.subheader("Log Loss")
         st.write(f"Mean Log Loss: {np.mean(log_loss_values):.3f} ± {np.std(log_loss_values):.3f}")
 
-        # Plotting Log Loss for Each Fold
         plt.figure(figsize=(10, 6))
-        plt.plot(range(1, len(log_loss_values) + 1), log_loss_values, marker='o', linestyle='-')
+        plt.plot(range(1, len(log_loss_values) + 1), log_loss_values, marker='o', linestyle='-', color='orange')
         plt.title('Log Loss for Each Fold of Cross-Validation')
         plt.xlabel('Fold Number')
         plt.ylabel('Log Loss')
-        plt.xticks(range(1, len(log_loss_values) + 1))
         plt.grid()
         st.pyplot(plt)
 
@@ -120,28 +135,11 @@ def evaluate_model(dataframe, method):
     if display_class_report:
         st.subheader("Classification Report")
         report_df = pd.DataFrame(report).transpose()
-        st.markdown("""
-        <style>
-            .report-table {
-                font-size: 18px;
-                width: 100%;
-                text-align: center;
-            }
-            .report-table th {
-                font-size: 20px;
-                padding: 10px;
-                background-color: #f0f0f0;
-            }
-            .report-table td {
-                font-size: 18px;
-                padding: 10px;
-            }
-        </style>
-        """, unsafe_allow_html=True)
+        st.markdown("""<style>.report-table { font-size: 18px; }</style>""", unsafe_allow_html=True)
         st.write(report_df.to_html(classes="report-table", index=True), unsafe_allow_html=True)
 
     # ROC Curve
-    if display_roc:
+    if display_roc and method != "Leave One Out Cross Validation":
         st.subheader("ROC Curve")
         auc_scores = []
         for train_index, test_index in cv_method.split(X, Y):
@@ -164,21 +162,23 @@ def evaluate_model(dataframe, method):
             plt.legend()
             st.pyplot(plt)
 
-
 # Main app
 def main():
     st.sidebar.subheader("Classification Sampling Techniques")
     method = st.sidebar.radio("Choose Sampling Technique:", ["K-Fold Cross Validation", "Leave One Out Cross Validation"])
     st.title("Classification Performance Metrics")
 
-    uploaded_file = st.file_uploader("Upload CSV File", type=["csv"])
-    if uploaded_file:
-        dataframe = load_data(uploaded_file)
-        st.subheader("Dataset Preview")
-        st.write(dataframe.head())
-        evaluate_model(dataframe, method)
-    else:
-        st.write("Please upload a CSV file to proceed.")
+    # Predefined Lung Cancer Dataset Path
+    lung_cancer_dataset_path = r"C:\Users\user\Desktop\jeah\ITD105\LABORATORY2\csv\survey lung cancer.csv"
+    dataframe = load_data(lung_cancer_dataset_path)
+
+    # Dataset preview
+    st.subheader("Dataset Preview")
+    with st.expander("Data Preview"):
+        st.dataframe(dataframe)
+
+    # Evaluate model with method
+    evaluate_model(dataframe, method)
 
 
 if __name__ == "__main__":
